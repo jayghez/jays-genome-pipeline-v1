@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Pipeline outputs can be regenerated and may contain personal genomic data.
+outputs/run_*/
+outputs/latest
+
+# Keep local reference/resource downloads out of git by default.
+references/
+resources/
+
+# Do not accidentally commit large or personal VCFs.
+*.vcf
+*.vcf.gz
+*.vcf.gz.tbi
+*.bcf
+*.bcf.csi
+!data/sample/.gitkeep

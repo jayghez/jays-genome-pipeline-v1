@@ -1,0 +1,87 @@
+objectives:
+  hereditary_cancer:
+    name: hereditary_cancer
+    workflow: disease_risk
+    description: "Prioritize rare protein-altering or splice variants in hereditary cancer genes."
+    keywords: ["cancer", "hereditary cancer", "tumor suppressor", "DNA repair"]
+    genes:
+      - BRCA1
+      - BRCA2
+      - TP53
+      - PTEN
+      - APC
+      - MLH1
+      - MSH2
+      - MSH6
+      - PMS2
+      - PALB2
+      - CHEK2
+      - ATM
+    consequence_filters:
+      - protein_altering
+      - splice
+      - missense
+      - nonsense_frameshift
+    max_allele_frequency: 0.01
+
+  cardiovascular_risk:
+    name: cardiovascular_risk
+    workflow: disease_risk
+    description: "Prioritize rare variants in genes associated with inherited cardiovascular risk."
+    keywords: ["cardiovascular", "cardiomyopathy", "arrhythmia", "lipids"]
+    genes:
+      - LDLR
+      - APOB
+      - PCSK9
+      - MYH7
+      - MYBPC3
+      - KCNQ1
+      - KCNH2
+      - SCN5A
+      - RYR2
+    consequence_filters:
+      - protein_altering
+      - splice
+      - nonsense_frameshift
+    max_allele_frequency: 0.01
+
+  carrier_screening:
+    name: carrier_screening
+    workflow: disease_risk
+    description: "Starter carrier-screening style pass for rare protein-altering variants."
+    keywords: ["carrier", "recessive", "screening"]
+    genes:
+      - CFTR
+      - HBB
+      - HEXA
+      - GBA
+      - PAH
+      - SMN1
+      - GJB2
+    consequence_filters:
+      - protein_altering
+      - splice
+      - nonsense_frameshift
+    max_allele_frequency: 0.02
+
+  secondary_findings:
+    name: secondary_findings
+    workflow: secondary_findings
+    description: "Configurable starter actionable-gene pass. This is not a complete ACMG SF implementation."
+    keywords: ["actionable", "secondary findings", "ACMG"]
+    gene_list_file: secondary_findings_genes.txt
+    consequence_filters:
+      - protein_altering
+      - splice
+      - nonsense_frameshift
+    max_allele_frequency: 0.01
+
+  pgx:
+    name: pharmacogenomics
+    workflow: pharmacogenomics
+    aliases: ["pharmacogenomics"]
+    description: "Gene-focused pharmacogenomics starter pass. No diplotype or prescribing calls are made."
+    keywords: ["pharmacogenomics", "PGx", "drug response"]
+    gene_list_file: pgx_genes.txt
+    consequence_filters: []
+    max_allele_frequency: null

@@ -1,0 +1,20 @@
+normalize:
+  reference_fasta: null
+  split_multiallelics: true
+
+resources:
+  clinvar_table: configs/clinvar_stub.csv
+  gnomad_table: configs/gnomad_stub.csv
+
+filters:
+  min_qual: 20
+  require_pass_filter: true
+  include_unknown_af: true
+  default_rare_af: 0.01
+
+annotation:
+  sample_index: 0
+  max_records: null
+
+ai:
+  enabled: false
