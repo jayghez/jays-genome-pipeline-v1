@@ -4,14 +4,19 @@ __pycache__/
 *.egg-info/
 .coverage
 htmlcov/
+.DS_Store
+.env
+.env.*
+*.local
 
 # Pipeline outputs can be regenerated and may contain personal genomic data.
-outputs/run_*/
-outputs/latest
+outputs/*
+!outputs/.gitkeep
 
-# Keep local reference/resource downloads out of git by default.
+# Keep local reference/resource downloads and private inputs out of git by default.
 references/
 resources/
+data/private/
 
 # Do not accidentally commit large or personal VCFs.
 *.vcf
@@ -19,4 +24,6 @@ resources/
 *.vcf.gz.tbi
 *.bcf
 *.bcf.csi
+*.tbi
+*.csi
 !data/sample/.gitkeep
