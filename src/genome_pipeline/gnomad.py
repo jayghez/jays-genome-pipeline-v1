@@ -35,12 +35,32 @@ def load_gnomad_table(path: Path | None) -> dict[str, dict[str, str]]:
 def apply_existing_frequency_info(variant: VariantRecord) -> None:
     if variant.gnomad_af is not None:
         return
+    info = variant.info or {}
     for key in ("gnomAD_AF", "GNOMAD_AF", "gnomADg_AF", "AF_POPMAX", "AF"):
-        af = _as_float(variant.info.get(key))
+        af = _as_float(info.get(key))
         if af is not None:
             variant.gnomad_af = af
             variant.gnomad_source = key
             return
+
+
+def annotate_variant_gnomad(
+    variant: VariantRecord,
+    table: dict[str, dict[str, str]],
+) -> bool:
+    apply_existing_frequency_info(variant)
+    row = table.get(variant.key)
+    if not row:
+        return False
+
+    af = _as_float(row.get("af_popmax"))
+    if af is None:
+        af = _as_float(row.get("af"))
+    if af is not None:
+        variant.gnomad_af = af
+        variant.gnomad_source = row.get("source") or "local_gnomad_table"
+        return True
+    return False
 
 
 def compare_gnomad(variants: list[VariantRecord], table_path: Path | None, logger=None) -> list[VariantRecord]:
@@ -50,17 +70,8 @@ def compare_gnomad(variants: list[VariantRecord], table_path: Path | None, logge
 
     matches = 0
     for variant in variants:
-        apply_existing_frequency_info(variant)
-        row = table.get(variant.key)
-        if not row:
-            continue
-        matches += 1
-        af = _as_float(row.get("af_popmax"))
-        if af is None:
-            af = _as_float(row.get("af"))
-        if af is not None:
-            variant.gnomad_af = af
-            variant.gnomad_source = row.get("source") or "local_gnomad_table"
+        if annotate_variant_gnomad(variant, table):
+            matches += 1
     if logger:
         logger.info("Matched %s variants to local gnomAD data", matches)
     return variants

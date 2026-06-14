@@ -24,7 +24,7 @@ def load_clinvar_table(path: Path | None) -> dict[str, dict[str, str]]:
 
 
 def apply_existing_clinvar_info(variant: VariantRecord) -> None:
-    info = variant.info
+    info = variant.info or {}
     if not variant.clinvar_significance and info.get("CLNSIG"):
         variant.clinvar_significance = str(info["CLNSIG"])
     if not variant.clinvar_trait and info.get("CLNDN"):
@@ -35,6 +35,22 @@ def apply_existing_clinvar_info(variant: VariantRecord) -> None:
         variant.clinvar_accession = f"ALLELEID:{info['ALLELEID']}"
 
 
+def annotate_variant_clinvar(
+    variant: VariantRecord,
+    table: dict[str, dict[str, str]],
+) -> bool:
+    apply_existing_clinvar_info(variant)
+    row = table.get(variant.key)
+    if not row:
+        return False
+
+    variant.clinvar_significance = row.get("clinvar_significance") or variant.clinvar_significance
+    variant.clinvar_trait = row.get("disease_trait") or row.get("trait") or variant.clinvar_trait
+    variant.clinvar_review_status = row.get("review_status") or variant.clinvar_review_status
+    variant.clinvar_accession = row.get("accession") or variant.clinvar_accession
+    return True
+
+
 def compare_clinvar(variants: list[VariantRecord], table_path: Path | None, logger=None) -> list[VariantRecord]:
     table = load_clinvar_table(table_path)
     if logger:
@@ -42,15 +58,8 @@ def compare_clinvar(variants: list[VariantRecord], table_path: Path | None, logg
 
     matches = 0
     for variant in variants:
-        apply_existing_clinvar_info(variant)
-        row = table.get(variant.key)
-        if not row:
-            continue
-        matches += 1
-        variant.clinvar_significance = row.get("clinvar_significance") or variant.clinvar_significance
-        variant.clinvar_trait = row.get("disease_trait") or row.get("trait") or variant.clinvar_trait
-        variant.clinvar_review_status = row.get("review_status") or variant.clinvar_review_status
-        variant.clinvar_accession = row.get("accession") or variant.clinvar_accession
+        if annotate_variant_clinvar(variant, table):
+            matches += 1
     if logger:
         logger.info("Matched %s variants to local ClinVar data", matches)
     return variants

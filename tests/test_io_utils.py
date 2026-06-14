@@ -26,3 +26,4 @@ def test_create_run_dir_has_expected_subdirs(tmp_path: Path):
 
     assert (run_dir / "normalized").is_dir()
     assert (run_dir / "logs").is_dir()
+    assert (run_dir / "wgs_overview").is_dir()

@@ -83,42 +83,55 @@ def apply_basic_filters(variants: Iterable[VariantRecord], filter_config: dict[s
     ]
 
 
+def objective_retention_reasons(
+    variant: VariantRecord,
+    objective: dict[str, Any],
+    filter_config: dict[str, Any],
+) -> list[str] | None:
+    genes = objective.get("genes", [])
+    consequence_filters = objective.get("consequence_filters", [])
+    threshold = objective.get("max_allele_frequency", filter_config.get("default_rare_af", 0.01))
+    include_unknown_af = filter_config.get("include_unknown_af", True)
+
+    if not passes_quality(
+        variant,
+        min_qual=filter_config.get("min_qual"),
+        require_pass_filter=filter_config.get("require_pass_filter", True),
+    ):
+        return None
+
+    reasons: list[str] = []
+    if genes:
+        if not gene_matches(variant, genes):
+            return None
+        reasons.append(f"gene matches objective ({variant.gene})")
+    if consequence_filters:
+        if not consequence_matches(variant, consequence_filters):
+            return None
+        reasons.append(f"consequence matches objective ({variant.consequence})")
+    if not is_rare(variant, threshold, include_unknown=include_unknown_af):
+        return None
+    if threshold is not None:
+        if variant.gnomad_af is None:
+            reasons.append("allele frequency unavailable; retained for review")
+        else:
+            reasons.append(f"allele frequency <= {threshold:g}")
+    if variant.clinvar_significance:
+        reasons.append(f"ClinVar: {variant.clinvar_significance}")
+    return reasons
+
+
 def apply_objective_filters(
     variants: Iterable[VariantRecord],
     objective: dict[str, Any],
     filter_config: dict[str, Any],
 ) -> list[VariantRecord]:
     retained: list[VariantRecord] = []
-    genes = objective.get("genes", [])
-    consequence_filters = objective.get("consequence_filters", [])
-    threshold = objective.get("max_allele_frequency", filter_config.get("default_rare_af", 0.01))
-    include_unknown_af = filter_config.get("include_unknown_af", True)
 
     for variant in variants:
-        reasons: list[str] = []
-        if not passes_quality(
-            variant,
-            min_qual=filter_config.get("min_qual"),
-            require_pass_filter=filter_config.get("require_pass_filter", True),
-        ):
+        reasons = objective_retention_reasons(variant, objective, filter_config)
+        if reasons is None:
             continue
-        if genes:
-            if not gene_matches(variant, genes):
-                continue
-            reasons.append(f"gene matches objective ({variant.gene})")
-        if consequence_filters:
-            if not consequence_matches(variant, consequence_filters):
-                continue
-            reasons.append(f"consequence matches objective ({variant.consequence})")
-        if not is_rare(variant, threshold, include_unknown=include_unknown_af):
-            continue
-        if threshold is not None:
-            if variant.gnomad_af is None:
-                reasons.append("allele frequency unavailable; retained for review")
-            else:
-                reasons.append(f"allele frequency <= {threshold:g}")
-        if variant.clinvar_significance:
-            reasons.append(f"ClinVar: {variant.clinvar_significance}")
         variant.retention_reasons = reasons
         retained.append(variant)
     return retained

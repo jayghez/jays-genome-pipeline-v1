@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from .io_utils import open_text_maybe_gzip, verify_vcf_header, write_variant_outputs
 from .schemas import VariantRecord
@@ -24,6 +25,16 @@ DEFAULT_ANN_FIELDS = [
     "HGVS.c",
     "HGVS.p",
 ]
+
+
+@dataclass(frozen=True)
+class AnnotationInspection:
+    annotation_fields: dict[str, list[str]]
+    has_gvcf_blocks: bool = False
+
+    @property
+    def has_structured_annotations(self) -> bool:
+        return bool(self.annotation_fields)
 
 
 def parse_info(value: str) -> dict[str, Any]:
@@ -53,12 +64,48 @@ def parse_annotation_headers(header_lines: list[str]) -> dict[str, list[str]]:
     return fields
 
 
+def inspect_annotation_headers(path: Path) -> AnnotationInspection:
+    verify_vcf_header(path)
+    header_lines: list[str] = []
+    has_gvcf_blocks = False
+    with open_text_maybe_gzip(path) as handle:
+        for line in handle:
+            line = line.rstrip("\n")
+            if line.startswith("##"):
+                header_lines.append(line)
+                if line.startswith("##INFO=<ID=END"):
+                    has_gvcf_blocks = True
+                if line.startswith("##ALT=<ID=NON_REF"):
+                    has_gvcf_blocks = True
+                continue
+            if line.startswith("#CHROM"):
+                break
+    return AnnotationInspection(
+        annotation_fields=parse_annotation_headers(header_lines),
+        has_gvcf_blocks=has_gvcf_blocks,
+    )
+
+
 def parse_format(format_value: str, sample_value: str | None) -> tuple[list[str], dict[str, str]]:
     if not format_value or format_value == "." or not sample_value:
         return [], {}
     keys = format_value.split(":")
     values = sample_value.split(":")
     return keys, {key: values[index] if index < len(values) else "" for index, key in enumerate(keys)}
+
+
+def extract_genotype(format_value: str, sample_value: str | None) -> str | None:
+    if not format_value or format_value == "." or not sample_value:
+        return None
+    keys = format_value.split(":")
+    try:
+        gt_index = keys.index("GT")
+    except ValueError:
+        return None
+    values = sample_value.split(":")
+    if gt_index >= len(values):
+        return None
+    return values[gt_index]
 
 
 def derive_zygosity(gt: str | None) -> str | None:
@@ -142,12 +189,20 @@ def extract_structured_annotation(info: dict[str, Any], alt: str, annotation_fie
     return result
 
 
-def parse_vcf_records(path: Path, sample_index: int = 0, max_records: int | None = None) -> list[VariantRecord]:
+def iter_vcf_records(
+    path: Path,
+    sample_index: int = 0,
+    max_records: int | None = None,
+    *,
+    parse_info_fields: bool = True,
+    skip_reference_blocks: bool = False,
+    skip_homozygous_reference: bool = False,
+) -> Iterator[VariantRecord]:
     verify_vcf_header(path)
     header_lines: list[str] = []
-    records: list[VariantRecord] = []
     column_header: list[str] = []
     annotation_fields: dict[str, list[str]] = {}
+    yielded = 0
 
     with open_text_maybe_gzip(path) as handle:
         for line in handle:
@@ -166,44 +221,54 @@ def parse_vcf_records(path: Path, sample_index: int = 0, max_records: int | None
             if len(parts) < 8:
                 continue
             chrom, pos, record_id, ref, alts, qual, filter_value, info_value = parts[:8]
+            if skip_reference_blocks and alts == ".":
+                continue
             format_value = parts[8] if len(parts) > 8 else ""
             sample_column_index = 9 + sample_index
             sample_value = parts[sample_column_index] if len(parts) > sample_column_index else None
-            format_keys, sample_values = parse_format(format_value, sample_value)
-            genotype = sample_values.get("GT")
-            info = parse_info(info_value)
+            genotype = extract_genotype(format_value, sample_value)
+            zygosity = derive_zygosity(genotype)
+            if skip_homozygous_reference and zygosity == "homozygous_ref":
+                continue
+            info = parse_info(info_value) if parse_info_fields and info_value not in {"", "."} else None
 
             for alt in alts.split(","):
-                structured = extract_structured_annotation(info, alt, annotation_fields)
-                rsid = record_id if record_id.startswith("rs") else _info_first(info, ["RS", "RSID", "dbSNP"])
-                records.append(
-                    VariantRecord(
-                        chrom=chrom,
-                        pos=int(pos),
-                        id=None if record_id == "." else record_id,
-                        ref=ref,
-                        alt=alt,
-                        qual=None if qual == "." else qual,
-                        filter=None if filter_value == "." else filter_value,
-                        info=info,
-                        format_keys=format_keys,
-                        sample_values=sample_values,
-                        genotype=genotype,
-                        zygosity=derive_zygosity(genotype),
-                        gene=structured["gene"],
-                        transcript=structured["transcript"],
-                        consequence=structured["consequence"],
-                        impact=structured["impact"],
-                        protein_change=structured["protein_change"],
-                        rsid=rsid,
-                        source=str(path),
-                    )
+                if skip_reference_blocks and alt == ".":
+                    continue
+                structured = (
+                    extract_structured_annotation(info or {}, alt, annotation_fields)
+                    if parse_info_fields
+                    else {"gene": None, "transcript": None, "consequence": None, "impact": None, "protein_change": None}
                 )
-                if max_records is not None and len(records) >= max_records:
-                    return records
+                rsid = record_id if record_id.startswith("rs") else _info_first(info or {}, ["RS", "RSID", "dbSNP"])
+                yield VariantRecord(
+                    chrom=chrom,
+                    pos=int(pos),
+                    id=None if record_id == "." else record_id,
+                    ref=ref,
+                    alt=alt,
+                    qual=None if qual == "." else qual,
+                    filter=None if filter_value == "." else filter_value,
+                    info=info,
+                    genotype=genotype,
+                    zygosity=zygosity,
+                    gene=structured["gene"],
+                    transcript=structured["transcript"],
+                    consequence=structured["consequence"],
+                    impact=structured["impact"],
+                    protein_change=structured["protein_change"],
+                    rsid=rsid,
+                    source=str(path),
+                )
+                yielded += 1
+                if max_records is not None and yielded >= max_records:
+                    return
     if not column_header:
         raise ValueError(f"No #CHROM header found in {path}")
-    return records
+
+
+def parse_vcf_records(path: Path, sample_index: int = 0, max_records: int | None = None) -> list[VariantRecord]:
+    return list(iter_vcf_records(path, sample_index=sample_index, max_records=max_records))
 
 
 def annotate_vcf(path: Path, output_dir: Path, config: dict[str, Any], logger) -> list[VariantRecord]:

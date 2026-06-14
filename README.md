@@ -14,6 +14,7 @@ It is for research and personal exploration only. It is not diagnostic software,
 - Supports local, pluggable ClinVar and gnomAD comparison tables.
 - Reduces candidate sets before any interpretation or optional AI summarization.
 - Keeps AI off by default and never sends raw VCF data to an AI step.
+- Detects large gVCF-style inputs without gene/effect annotations and writes preview plus readiness summaries instead of stalling on full all-variant exports.
 
 ## What It Does Not Do
 
@@ -69,6 +70,7 @@ outputs/run_YYYYMMDD_HHMMSS/
   normalized/
   annotated/
   filtered/
+  wgs_overview/
   disease_risk/
   secondary_findings/
   pharmacogenomics/
@@ -93,6 +95,15 @@ genome-pipeline run \
 ```
 
 The code accepts `.vcf` and `.vcf.gz`. Uncompressed VCFs are converted to bgzipped VCFs by `bcftools` during normalization. If you have a GRCh38 reference FASTA, set `normalize.reference_fasta` in `configs/pipeline.yaml` to enable left alignment against that reference.
+
+If the input is a raw gVCF-style file without `ANN` or `CSQ` consequence annotations, the pipeline now finishes by writing:
+
+- normalized outputs
+- non-reference and basic-quality preview tables
+- WGS overview tables for chromosome counts, variant-type counts, zygosity counts, and representative high-quality variants
+- annotation-readiness summaries that explain why disease-risk and PGx candidate tables are empty
+
+To get meaningful gene-based candidate outputs from that kind of file, annotate the normalized VCF first with VEP or SnpEff and then rerun the pipeline.
 
 ## Local ClinVar And gnomAD Tables
 

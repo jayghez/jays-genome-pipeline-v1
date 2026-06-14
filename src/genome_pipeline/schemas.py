@@ -18,7 +18,7 @@ def variant_key(chrom: str, pos: int | str, ref: str, alt: str) -> str:
     return f"{normalize_chrom(chrom)}:{int(pos)}:{ref.upper()}:{alt.upper()}"
 
 
-@dataclass
+@dataclass(slots=True)
 class VariantRecord:
     chrom: str
     pos: int
@@ -27,9 +27,9 @@ class VariantRecord:
     id: str | None = None
     qual: str | None = None
     filter: str | None = None
-    info: dict[str, Any] = field(default_factory=dict)
-    format_keys: list[str] = field(default_factory=list)
-    sample_values: dict[str, str] = field(default_factory=dict)
+    info: dict[str, Any] | None = None
+    format_keys: tuple[str, ...] = ()
+    sample_values: dict[str, str] | None = None
     genotype: str | None = None
     zygosity: str | None = None
     gene: str | None = None

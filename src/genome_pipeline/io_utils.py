@@ -17,6 +17,7 @@ RUN_SUBDIRS = [
     "normalized",
     "annotated",
     "filtered",
+    "wgs_overview",
     "disease_risk",
     "secondary_findings",
     "pharmacogenomics",
@@ -102,6 +103,14 @@ def write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
+def write_csv_rows(path: Path, fieldnames: list[str], rows: Iterable[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def write_markdown_table(path: Path, variants: list[VariantRecord], title: str, limit: int = 100) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = [variant.to_dict() for variant in variants[:limit]]
@@ -149,10 +158,7 @@ def write_variant_outputs(output_dir: Path, stem: str, variants: Iterable[Varian
     md_path = output_dir / f"{stem}.md"
 
     fieldnames = list(VariantRecord("0", 0, "N", "N").to_dict().keys())
-    with csv_path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+    write_csv_rows(csv_path, fieldnames, rows)
 
     write_json(json_path, rows)
     write_markdown_table(md_path, variant_list, title)
