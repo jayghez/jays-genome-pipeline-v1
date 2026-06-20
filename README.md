@@ -9,18 +9,20 @@ It is for research and personal exploration only. It is not diagnostic software,
 - Validates `.vcf` and `.vcf.gz` inputs.
 - Creates timestamped run folders under `outputs/`.
 - Normalizes variants with `bcftools`, including multiallelic splitting and optional left alignment if a reference FASTA is configured.
+- Can add SnpEff consequence annotations to raw VCF or gVCF inputs when a local SnpEff install is available.
 - Parses structured VCF `INFO` and `FORMAT` fields into CSV, JSON, and Markdown.
 - Runs separate passes for disease-risk objectives, secondary findings, and pharmacogenomics.
 - Supports local, pluggable ClinVar and gnomAD comparison tables.
 - Reduces candidate sets before any interpretation or optional AI summarization.
 - Keeps AI off by default and never sends raw VCF data to an AI step.
 - Detects large gVCF-style inputs without gene/effect annotations and writes preview plus readiness summaries instead of stalling on full all-variant exports.
+- Streams large annotated gVCF-style WGS inputs into compact candidate tables, count summaries, and AI-friendly previews instead of writing massive all-variant exports.
 
 ## What It Does Not Do
 
 - It does not diagnose disease.
 - It does not make clinical pharmacogenomic diplotype or prescribing calls.
-- It does not perform real VEP/SnpEff annotation unless your VCF already contains those annotations.
+- It does not perform VEP annotation.
 - It does not bundle ClinVar, gnomAD, reference FASTA, PharmCAT, or HPO databases.
 - It does not decide pathogenicity for variants of uncertain significance.
 
@@ -46,6 +48,8 @@ source .venv/bin/activate
 make test
 make check-tools
 ```
+
+If your WGS file is a raw Sequencing.com-style gVCF without `ANN` or `CSQ`, also install Java 21+ and a local SnpEff copy under `resources/snpEff/`, then set or keep the default `annotation` values in `configs/pipeline.yaml`.
 
 ## Run The GIAB-Derived Sample
 
@@ -96,14 +100,23 @@ genome-pipeline run \
 
 The code accepts `.vcf` and `.vcf.gz`. Uncompressed VCFs are converted to bgzipped VCFs by `bcftools` during normalization. If you have a GRCh38 reference FASTA, set `normalize.reference_fasta` in `configs/pipeline.yaml` to enable left alignment against that reference.
 
-If the input is a raw gVCF-style file without `ANN` or `CSQ` consequence annotations, the pipeline now finishes by writing:
+If the input is a raw gVCF-style file without `ANN` or `CSQ` consequence annotations and no local SnpEff backend is available, the pipeline finishes by writing:
 
 - normalized outputs
 - non-reference and basic-quality preview tables
 - WGS overview tables for chromosome counts, variant-type counts, zygosity counts, and representative high-quality variants
 - annotation-readiness summaries that explain why disease-risk and PGx candidate tables are empty
 
-To get meaningful gene-based candidate outputs from that kind of file, annotate the normalized VCF first with VEP or SnpEff and then rerun the pipeline.
+If local SnpEff is available, the pipeline can annotate that file automatically and then continue in streaming mode. In that mode it writes compact genome-wide count tables plus ranked candidate outputs such as:
+
+- `annotated/summary.md`
+- `annotated/annotation_summary.json`
+- `annotated/variants_with_refs_preview.csv`
+- `annotated/clinvar_pathogenic_preview.csv`
+- `annotated/gene_counts.csv`
+- `disease_risk/top_candidates.csv`
+- `secondary_findings/secondary_findings.csv`
+- `pharmacogenomics/pgx_gene_candidates.csv`
 
 ## Local ClinVar And gnomAD Tables
 
@@ -146,7 +159,7 @@ VCFs are sensitive personal genomic data. Keep private files out of git, avoid c
 
 Planned future upgrades are marked with TODOs in the code:
 
-- VEP or SnpEff annotation backend.
+- VEP annotation backend.
 - Real local ClinVar VCF/SQLite joins.
 - Real local gnomAD frequency joins.
 - HPO/phenotype scoring.

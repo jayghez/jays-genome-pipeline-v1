@@ -137,18 +137,19 @@ def apply_objective_filters(
     return retained
 
 
-def rank_variants(variants: Iterable[VariantRecord]) -> list[VariantRecord]:
-    def score(variant: VariantRecord) -> tuple[int, str, int]:
-        value = 0
-        sig = (variant.clinvar_significance or "").lower().replace(" ", "_")
-        if "pathogenic" in sig and "conflicting" not in sig:
-            value += 100 if "likely" not in sig else 80
-        if variant.impact:
-            value += {"HIGH": 40, "MODERATE": 25, "LOW": 5}.get(variant.impact.upper(), 0)
-        if variant.gnomad_af is not None and variant.gnomad_af <= 0.01:
-            value += 15
-        if variant.gene:
-            value += 5
-        return (value, variant.chrom, -variant.pos)
+def variant_priority_key(variant: VariantRecord) -> tuple[int, str, int]:
+    value = 0
+    sig = (variant.clinvar_significance or "").lower().replace(" ", "_")
+    if "pathogenic" in sig and "conflicting" not in sig:
+        value += 100 if "likely" not in sig else 80
+    if variant.impact:
+        value += {"HIGH": 40, "MODERATE": 25, "LOW": 5}.get(variant.impact.upper(), 0)
+    if variant.gnomad_af is not None and variant.gnomad_af <= 0.01:
+        value += 15
+    if variant.gene:
+        value += 5
+    return (value, variant.chrom, -variant.pos)
 
-    return sorted(variants, key=score, reverse=True)
+
+def rank_variants(variants: Iterable[VariantRecord]) -> list[VariantRecord]:
+    return sorted(variants, key=variant_priority_key, reverse=True)

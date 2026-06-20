@@ -8,6 +8,7 @@ from pathlib import Path
 from .annotate import annotate_vcf, inspect_annotation_headers
 from .clinvar import compare_clinvar
 from .config import DEFAULT_OBJECTIVES_CONFIG, DEFAULT_PIPELINE_CONFIG, get_objective, load_objectives, load_pipeline_config, resource_path
+from .effect_annotation import annotate_effects
 from .filter_variants import apply_basic_filters
 from .gnomad import compare_gnomad
 from .io_utils import create_run_dir, validate_vcf_path, write_json, write_variant_outputs
@@ -16,6 +17,7 @@ from .normalize import normalize_vcf
 from .pharmacogenomics import run_pharmacogenomics_pass
 from .phenotype import run_disease_risk_pass
 from .secondary_findings import run_secondary_findings_pass
+from .streaming_interpretation import run_streaming_interpretation_pipeline
 from .summarize import summarize_reduced_output
 from .wgs_overview import generate_wgs_overview
 
@@ -65,7 +67,7 @@ def _run_unstructured_input_pipeline(
             "",
             "Research-only status note. Not medical advice or diagnosis.",
             "",
-            "The normalized input does not contain `ANN` or `CSQ` consequence annotations, so gene-focused interpretation was not run against the full variant set.",
+            "The prepared input does not contain structured `ANN` or `CSQ` consequence annotations, so gene-focused interpretation was not run against the full variant set.",
             "",
             f"Non-reference variant alleles scanned: {stats['non_reference_variant_alleles']}",
             f"Basic quality variant alleles: {stats['basic_quality_variant_alleles']}",
@@ -111,17 +113,38 @@ def run_pipeline(args: argparse.Namespace) -> Path:
     logger.info("Selected objective: %s", selected.get("name"))
 
     normalized_vcf = normalize_vcf(args.vcf, run_dir / "normalized", config, logger)
-    inspection = inspect_annotation_headers(normalized_vcf)
-    if not inspection.has_structured_annotations and inspection.has_gvcf_blocks:
-        logger.warning(
-            "No ANN/CSQ annotations were found in gVCF-style input %s; writing preview outputs and annotation-readiness summaries instead.",
-            normalized_vcf,
-        )
+    prepared_vcf = annotate_effects(normalized_vcf, run_dir / "annotated" / "backend", config, logger)
+    inspection = inspect_annotation_headers(prepared_vcf)
+    if not inspection.has_structured_annotations:
+        if inspection.has_gvcf_blocks:
+            logger.warning(
+                "No ANN/CSQ annotations were found in gVCF-style input %s; writing preview outputs and annotation-readiness summaries instead.",
+                prepared_vcf,
+            )
+        else:
+            logger.warning(
+                "No ANN/CSQ annotations were found in input %s; writing preview outputs and annotation-readiness summaries instead.",
+                prepared_vcf,
+            )
         _run_unstructured_input_pipeline(normalized_vcf, run_dir, selected, secondary_objective, pgx_objective, config, logger)
         logger.info("Pipeline complete: %s", run_dir)
         return run_dir
+    if inspection.has_structured_annotations and inspection.has_gvcf_blocks:
+        logger.info("Structured annotations detected in gVCF-style input; using streaming interpretation mode")
+        run_streaming_interpretation_pipeline(
+            prepared_vcf,
+            normalized_vcf,
+            run_dir,
+            selected,
+            secondary_objective,
+            pgx_objective,
+            config,
+            logger,
+        )
+        logger.info("Pipeline complete: %s", run_dir)
+        return run_dir
 
-    variants = annotate_vcf(normalized_vcf, run_dir / "annotated", config, logger)
+    variants = annotate_vcf(prepared_vcf, run_dir / "annotated", config, logger)
     compare_clinvar(variants, resource_path(config, "clinvar_table"), logger)
     compare_gnomad(variants, resource_path(config, "gnomad_table"), logger)
     write_variant_outputs(run_dir / "annotated", "variants_with_refs", variants, "Annotated Variants With Local References")

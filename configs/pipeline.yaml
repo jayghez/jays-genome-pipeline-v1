@@ -13,10 +13,15 @@ filters:
   default_rare_af: 0.01
 
 annotation:
+  backend: auto
   sample_index: 0
   max_records: null
   preview_limit: 200
   top_variant_limit: 100
+  candidate_output_limit: 500
+  snpeff_dir: resources/snpEff
+  snpeff_genome: GRCh38.p13
+  snpeff_memory_gb: 8
 
 ai:
   enabled: false

@@ -16,9 +16,10 @@ def test_iter_vcf_records_skips_reference_blocks_and_hom_ref(tmp_path: Path) -> 
     vcf = tmp_path / "sample.g.vcf"
     vcf.write_text(
         "##fileformat=VCFv4.2\n"
+        "##ALT=<ID=NON_REF,Description=\"Represents any possible alternative allele at this location\">\n"
         "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE\n"
         "1\t10\t.\tA\t.\t50\tPASS\tEND=20\tGT\t0/0\n"
-        "1\t21\trs1\tC\tT\t50\tPASS\t.\tGT\t0/1\n"
+        "1\t21\trs1\tC\tT,<NON_REF>\t50\tPASS\t.\tGT\t0/1\n"
         "1\t22\trs2\tG\tA\t50\tPASS\t.\tGT\t0/0\n"
     )
 

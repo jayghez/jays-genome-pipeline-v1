@@ -12,6 +12,7 @@ from .schemas import VariantRecord
 
 
 IMPACT_ORDER = {"HIGH": 4, "MODERATE": 3, "LOW": 2, "MODIFIER": 1}
+GVCF_PLACEHOLDER_ALTS = {".", "<NON_REF>", "<*>"}
 DEFAULT_ANN_FIELDS = [
     "Allele",
     "Annotation",
@@ -221,7 +222,7 @@ def iter_vcf_records(
             if len(parts) < 8:
                 continue
             chrom, pos, record_id, ref, alts, qual, filter_value, info_value = parts[:8]
-            if skip_reference_blocks and alts == ".":
+            if skip_reference_blocks and alts in GVCF_PLACEHOLDER_ALTS:
                 continue
             format_value = parts[8] if len(parts) > 8 else ""
             sample_column_index = 9 + sample_index
@@ -233,7 +234,7 @@ def iter_vcf_records(
             info = parse_info(info_value) if parse_info_fields and info_value not in {"", "."} else None
 
             for alt in alts.split(","):
-                if skip_reference_blocks and alt == ".":
+                if skip_reference_blocks and alt in GVCF_PLACEHOLDER_ALTS:
                     continue
                 structured = (
                     extract_structured_annotation(info or {}, alt, annotation_fields)
